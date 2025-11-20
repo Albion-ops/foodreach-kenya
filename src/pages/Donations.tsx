@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Calendar, Package } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/lib/supabase';
+import { MapPin, Package, Calendar, Map } from 'lucide-react';
+import DonationMap from '@/components/DonationMap';
 import { toast } from 'sonner';
 
 interface Donation {
@@ -50,11 +52,9 @@ const Donations = () => {
       <Navbar />
       
       <main className="container mx-auto px-4 py-16">
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-foreground mb-4">Available Donations</h1>
-          <p className="text-xl text-muted-foreground">
-            Browse food and relief resources available for those in need
-          </p>
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold text-foreground mb-2">Available Donations</h1>
+          <p className="text-muted-foreground">Browse food donations and relief resources available in your area</p>
         </div>
 
         {loading ? (
@@ -62,56 +62,74 @@ const Donations = () => {
             <p className="text-muted-foreground">Loading donations...</p>
           </div>
         ) : donations.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">No donations available at the moment. Check back soon!</p>
-          </div>
+          <Card>
+            <CardContent className="py-12 text-center">
+              <p className="text-muted-foreground">No donations available at the moment.</p>
+            </CardContent>
+          </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {donations.map((donation) => (
-              <Card key={donation.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                {donation.image_url && (
-                  <div className="h-48 overflow-hidden">
-                    <img
-                      src={donation.image_url}
-                      alt={donation.food_type}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <CardTitle className="text-xl">{donation.food_type}</CardTitle>
-                    <Badge variant="secondary">{donation.status}</Badge>
-                  </div>
-                  <CardDescription className="flex items-center gap-2 mt-2">
-                    <Package className="w-4 h-4" />
-                    {donation.quantity}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {donation.description && (
-                    <p className="text-sm text-muted-foreground">{donation.description}</p>
-                  )}
-                  
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <MapPin className="w-4 h-4" />
-                    {donation.location}
-                  </div>
+          <Tabs defaultValue="grid" className="w-full">
+            <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 mb-8">
+              <TabsTrigger value="grid">
+                <Package className="w-4 h-4 mr-2" />
+                Grid View
+              </TabsTrigger>
+              <TabsTrigger value="map">
+                <Map className="w-4 h-4 mr-2" />
+                Map View
+              </TabsTrigger>
+            </TabsList>
 
-                  {donation.expiry_date && (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Calendar className="w-4 h-4" />
-                      Expires: {new Date(donation.expiry_date).toLocaleDateString()}
-                    </div>
-                  )}
+            <TabsContent value="grid">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {donations.map((donation) => (
+                  <Card key={donation.id}>
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <CardTitle className="text-xl">{donation.food_type}</CardTitle>
+                        <Badge variant={donation.status === 'available' ? 'default' : 'secondary'}>
+                          {donation.status}
+                        </Badge>
+                      </div>
+                      <CardDescription className="flex items-center gap-2 mt-2">
+                        <Package className="w-4 h-4" />
+                        {donation.quantity}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {donation.image_url && (
+                        <img 
+                          src={donation.image_url} 
+                          alt={donation.food_type}
+                          className="w-full h-48 object-cover rounded-md"
+                        />
+                      )}
+                      
+                      {donation.description && (
+                        <p className="text-sm text-muted-foreground">{donation.description}</p>
+                      )}
+                      
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <MapPin className="w-4 h-4" />
+                        {donation.location}
+                      </div>
 
-                  <div className="text-xs text-muted-foreground pt-2 border-t">
-                    Posted {new Date(donation.created_at).toLocaleDateString()}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                      {donation.expiry_date && (
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Calendar className="w-4 h-4" />
+                          Expires: {new Date(donation.expiry_date).toLocaleDateString()}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="map">
+              <DonationMap donations={donations} />
+            </TabsContent>
+          </Tabs>
         )}
       </main>
 
