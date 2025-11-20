@@ -4,11 +4,12 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { Users, Package, Shield } from 'lucide-react';
 import { toast } from 'sonner';
-import { Users, Package, TrendingUp } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
 
 interface Donation {
   id: string;
@@ -28,19 +29,16 @@ interface Profile {
   phone: string | null;
   location: string | null;
   created_at: string;
+  user_roles?: { role: string }[];
 }
 
 const Admin = () => {
   const { user, loading: authLoading, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [donations, setDonations] = useState<Donation[]>([]);
-  const [users, setUsers] = useState<Profile[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalDonations: 0,
-    totalUsers: 0,
-    availableDonations: 0
-  });
+  const [profilesLoading, setProfilesLoading] = useState(true);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -53,14 +51,14 @@ const Admin = () => {
 
   useEffect(() => {
     if (user && isAdmin) {
-      fetchData();
+      fetchDonations();
+      fetchProfiles();
     }
   }, [user, isAdmin]);
 
-  const fetchData = async () => {
+  const fetchDonations = async () => {
     try {
-      // Fetch donations with user info
-      const { data: donationsData, error: donationsError } = await supabase
+      const { data, error } = await supabase
         .from('donations')
         .select(`
           *,
@@ -70,29 +68,61 @@ const Admin = () => {
         `)
         .order('created_at', { ascending: false });
 
-      if (donationsError) throw donationsError;
-      setDonations(donationsData as any || []);
+      if (error) throw error;
+      setDonations(data as any || []);
+    } catch (error: any) {
+      console.error('Error fetching donations:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      // Fetch users
-      const { data: usersData, error: usersError } = await supabase
+  const fetchProfiles = async () => {
+    try {
+      const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (usersError) throw usersError;
-      setUsers(usersData || []);
-
-      // Calculate stats
-      setStats({
-        totalDonations: donationsData?.length || 0,
-        totalUsers: usersData?.length || 0,
-        availableDonations: donationsData?.filter(d => d.status === 'available').length || 0
-      });
+      if (error) throw error;
+      
+      // Fetch user roles separately
+      if (data) {
+        const profilesWithRoles = await Promise.all(
+          data.map(async (profile) => {
+            const { data: rolesData } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', profile.id);
+            
+            return {
+              ...profile,
+              user_roles: rolesData || []
+            };
+          })
+        );
+        setProfiles(profilesWithRoles);
+      }
     } catch (error: any) {
-      toast.error('Failed to load admin data');
-      console.error('Error:', error);
+      console.error('Error fetching profiles:', error);
     } finally {
-      setLoading(false);
+      setProfilesLoading(false);
+    }
+  };
+
+  const promoteToAdmin = async (userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('user_roles')
+        .insert([{ user_id: userId, role: 'admin' }]);
+
+      if (error) throw error;
+      
+      toast.success('User promoted to admin successfully');
+      fetchProfiles();
+    } catch (error: any) {
+      console.error('Error promoting user:', error);
+      toast.error('Failed to promote user to admin');
     }
   };
 
@@ -111,14 +141,14 @@ const Admin = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Donations</CardTitle>
               <Package className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalDonations}</div>
+              <div className="text-2xl font-bold">{donations.length}</div>
             </CardContent>
           </Card>
 
@@ -128,17 +158,7 @@ const Admin = () => {
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalUsers}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Available Donations</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.availableDonations}</div>
+              <div className="text-2xl font-bold">{profiles.length}</div>
             </CardContent>
           </Card>
         </div>
@@ -188,7 +208,7 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="users" className="mt-6">
-            {loading ? (
+            {profilesLoading ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground">Loading users...</p>
               </div>
@@ -196,24 +216,44 @@ const Admin = () => {
               <Card>
                 <CardHeader>
                   <CardTitle>All Users</CardTitle>
-                  <CardDescription>View all registered users</CardDescription>
+                  <CardDescription>View and manage registered users</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {users.map((user) => (
-                      <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <h3 className="font-semibold">{user.full_name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {user.phone && `${user.phone} • `}
-                            {user.location || 'No location set'}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            Joined: {new Date(user.created_at).toLocaleDateString()}
-                          </p>
+                    {profiles.map((profile) => {
+                      const isAdmin = profile.user_roles?.some(r => r.role === 'admin');
+                      return (
+                        <div key={profile.id} className="flex items-center justify-between p-4 border rounded-lg">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold">{profile.full_name}</h3>
+                              {isAdmin && (
+                                <Badge variant="default">
+                                  <Shield className="w-3 h-3 mr-1" />
+                                  Admin
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              {profile.phone && `${profile.phone} • `}
+                              {profile.location || 'No location set'}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Joined: {new Date(profile.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          {!isAdmin && (
+                            <Button 
+                              onClick={() => promoteToAdmin(profile.id)}
+                              size="sm"
+                            >
+                              <Shield className="w-4 h-4 mr-2" />
+                              Promote to Admin
+                            </Button>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
