@@ -7,8 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Users, Package, TrendingUp } from 'lucide-react';
+import { Users, Package, TrendingUp, Shield } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface Donation {
   id: string;
@@ -28,6 +29,7 @@ interface Profile {
   phone: string | null;
   location: string | null;
   created_at: string;
+  isAdmin?: boolean;
 }
 
 const Admin = () => {
@@ -80,7 +82,21 @@ const Admin = () => {
         .order('created_at', { ascending: false });
 
       if (usersError) throw usersError;
-      setUsers(usersData || []);
+
+      // Fetch user roles to check who is admin
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+
+      if (rolesError) throw rolesError;
+
+      // Map users with admin status
+      const usersWithRoles = usersData?.map(user => ({
+        ...user,
+        isAdmin: rolesData?.some(role => role.user_id === user.id && role.role === 'admin')
+      })) || [];
+
+      setUsers(usersWithRoles);
 
       // Calculate stats
       setStats({
@@ -93,6 +109,22 @@ const Admin = () => {
       console.error('Error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const promoteToAdmin = async (userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('user_roles')
+        .insert({ user_id: userId, role: 'admin' });
+
+      if (error) throw error;
+
+      toast.success('User promoted to admin successfully');
+      fetchData(); // Refresh the data
+    } catch (error: any) {
+      toast.error('Failed to promote user to admin');
+      console.error('Error:', error);
     }
   };
 
@@ -202,8 +234,16 @@ const Admin = () => {
                   <div className="space-y-4">
                     {users.map((user) => (
                       <div key={user.id} className="flex items-center justify-between p-4 border rounded-lg">
-                        <div>
-                          <h3 className="font-semibold">{user.full_name}</h3>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <h3 className="font-semibold">{user.full_name}</h3>
+                            {user.isAdmin && (
+                              <Badge variant="default" className="gap-1">
+                                <Shield className="h-3 w-3" />
+                                Admin
+                              </Badge>
+                            )}
+                          </div>
                           <p className="text-sm text-muted-foreground">
                             {user.phone && `${user.phone} • `}
                             {user.location || 'No location set'}
@@ -212,6 +252,17 @@ const Admin = () => {
                             Joined: {new Date(user.created_at).toLocaleDateString()}
                           </p>
                         </div>
+                        {!user.isAdmin && (
+                          <Button 
+                            onClick={() => promoteToAdmin(user.id)}
+                            variant="outline"
+                            size="sm"
+                            className="gap-2"
+                          >
+                            <Shield className="h-4 w-4" />
+                            Promote to Admin
+                          </Button>
+                        )}
                       </div>
                     ))}
                   </div>
