@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, MapPin, Calendar, Package, Upload } from 'lucide-react';
+import { Plus, Edit, Trash2, MapPin, Calendar, Package } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { z } from 'zod';
 
@@ -41,8 +41,6 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingDonation, setEditingDonation] = useState<Donation | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [imageFile, setImageFile] = useState<File | null>(null);
   
   const [formData, setFormData] = useState({
     food_type: '',
@@ -82,58 +80,25 @@ const Dashboard = () => {
     }
   };
 
-  const handleImageUpload = async (file: File): Promise<string | null> => {
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${user?.id}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('donation-images')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data } = supabase.storage
-        .from('donation-images')
-        .getPublicUrl(filePath);
-
-      return data.publicUrl;
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      toast.error('Failed to upload image');
-      return null;
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setUploading(true);
 
     try {
       const validated = donationSchema.parse(formData);
-      let imageUrl = editingDonation?.image_url || null;
-
-      // Upload new image if selected
-      if (imageFile) {
-        const uploadedUrl = await handleImageUpload(imageFile);
-        if (uploadedUrl) imageUrl = uploadedUrl;
-      }
 
       if (editingDonation) {
         const { error } = await supabase
           .from('donations')
           .update({
             ...validated,
-            expiry_date: validated.expiry_date || null,
-            image_url: imageUrl
+            expiry_date: validated.expiry_date || null
           })
           .eq('id', editingDonation.id);
 
         if (error) throw error;
         toast.success('Donation updated successfully');
       } else {
-        const { data: newDonation, error } = await supabase
+        const { error } = await supabase
           .from('donations')
           .insert([{
             food_type: validated.food_type,
@@ -141,29 +106,10 @@ const Dashboard = () => {
             description: validated.description || null,
             location: validated.location,
             expiry_date: validated.expiry_date || null,
-            image_url: imageUrl,
             user_id: user?.id!
-          }])
-          .select()
-          .single();
+          }]);
 
         if (error) throw error;
-        
-        // Send email notification
-        try {
-          await supabase.functions.invoke('send-donation-notification', {
-            body: {
-              donationId: newDonation.id,
-              foodType: validated.food_type,
-              quantity: validated.quantity,
-              location: validated.location
-            }
-          });
-        } catch (emailError) {
-          console.error('Failed to send email notification:', emailError);
-          // Don't fail the whole operation if email fails
-        }
-
         toast.success('Donation created successfully');
       }
 
@@ -176,8 +122,6 @@ const Dashboard = () => {
       } else {
         toast.error('Failed to save donation');
       }
-    } finally {
-      setUploading(false);
     }
   };
 
@@ -219,7 +163,6 @@ const Dashboard = () => {
       expiry_date: ''
     });
     setEditingDonation(null);
-    setImageFile(null);
   };
 
   if (authLoading || !user) {
@@ -309,26 +252,8 @@ const Dashboard = () => {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    <Upload className="w-4 h-4 inline mr-2" />
-                    Upload Photo (Optional)
-                  </label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-                    className="cursor-pointer"
-                  />
-                  {imageFile && (
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Selected: {imageFile.name}
-                    </p>
-                  )}
-                </div>
-
-                <Button type="submit" className="w-full" disabled={uploading}>
-                  {uploading ? 'Uploading...' : editingDonation ? 'Update Donation' : 'Create Donation'}
+                <Button type="submit" className="w-full">
+                  {editingDonation ? 'Update Donation' : 'Create Donation'}
                 </Button>
               </form>
             </DialogContent>
@@ -366,14 +291,6 @@ const Dashboard = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {donation.image_url && (
-                    <img 
-                      src={donation.image_url} 
-                      alt={donation.food_type}
-                      className="w-full h-48 object-cover rounded-md"
-                    />
-                  )}
-                  
                   {donation.description && (
                     <p className="text-sm text-muted-foreground">{donation.description}</p>
                   )}
