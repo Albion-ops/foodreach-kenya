@@ -114,9 +114,19 @@ const Admin = () => {
 
   const promoteToAdmin = async (userId: string) => {
     try {
-      const { error } = await supabase
-        .from('user_roles')
-        .insert({ user_id: userId, role: 'admin' });
+      const userToPromote = users.find(u => u.id === userId);
+      if (!userToPromote) {
+        toast.error('User not found');
+        return;
+      }
+
+      // Call edge function to promote user and send email
+      const { error } = await supabase.functions.invoke('promote-to-admin', {
+        body: {
+          userId: userId,
+          userName: userToPromote.full_name,
+        },
+      });
 
       if (error) throw error;
 
