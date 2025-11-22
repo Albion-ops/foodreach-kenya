@@ -98,7 +98,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error };
       }
 
-      toast.success('Account created successfully!');
+      // Send welcome email
+      try {
+        await supabase.functions.invoke('send-welcome-email', {
+          body: {
+            userName: fullName,
+            userEmail: email,
+          },
+        });
+      } catch (emailError) {
+        console.error('Failed to send welcome email:', emailError);
+        // Don't fail signup if email fails
+      }
+
+      toast.success('Account created successfully! Check your email for a welcome message.');
       navigate('/');
       return { error: null };
     } catch (error: any) {
