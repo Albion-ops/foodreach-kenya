@@ -4,8 +4,10 @@ import Footer from '@/components/Footer';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { MapPin, Calendar, Package } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Donation {
   id: string;
@@ -22,6 +24,8 @@ interface Donation {
 const Donations = () => {
   const [donations, setDonations] = useState<Donation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchDonations();
@@ -42,6 +46,44 @@ const Donations = () => {
       console.error('Error fetching donations:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClaimDonation = async (donationId: string) => {
+    if (!user) {
+      toast.error('Please sign in to claim donations');
+      return;
+    }
+
+    setClaimingId(donationId);
+    try {
+      // Update donation status to claimed
+      const { error: updateError } = await supabase
+        .from('donations')
+        .update({ status: 'claimed' })
+        .eq('id', donationId);
+
+      if (updateError) throw updateError;
+
+      // Send notification email to donor
+      const { error: emailError } = await supabase.functions.invoke('send-donation-claimed-email', {
+        body: { donationId },
+      });
+
+      if (emailError) {
+        console.error('Failed to send notification email:', emailError);
+        // Don't fail the claim if email fails
+      }
+
+      toast.success('Donation claimed successfully! The donor has been notified.');
+      
+      // Remove claimed donation from the list
+      setDonations(donations.filter(d => d.id !== donationId));
+    } catch (error: any) {
+      toast.error('Failed to claim donation');
+      console.error('Error claiming donation:', error);
+    } finally {
+      setClaimingId(null);
     }
   };
 
@@ -108,6 +150,14 @@ const Donations = () => {
                   <div className="text-xs text-muted-foreground pt-2 border-t">
                     Posted {new Date(donation.created_at).toLocaleDateString()}
                   </div>
+
+                  <Button 
+                    onClick={() => handleClaimDonation(donation.id)}
+                    disabled={claimingId === donation.id || !user}
+                    className="w-full mt-4"
+                  >
+                    {claimingId === donation.id ? 'Claiming...' : 'Claim Donation'}
+                  </Button>
                 </CardContent>
               </Card>
             ))}
