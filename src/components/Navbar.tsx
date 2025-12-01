@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { Heart, Menu, X, LogOut, LayoutDashboard } from 'lucide-react';
+import { Heart, Menu, X, LogOut, LayoutDashboard, BarChart3 } from 'lucide-react';
 import { useState } from 'react';
 
 const Navbar = () => {
@@ -42,6 +42,12 @@ const Navbar = () => {
                   <Button variant="outline" size="sm">
                     <LayoutDashboard className="w-4 h-4 mr-2" />
                     Dashboard
+                  </Button>
+                </Link>
+                <Link to="/analytics">
+                  <Button variant="outline" size="sm">
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Analytics
                   </Button>
                 </Link>
                 {isAdmin && (
@@ -92,6 +98,12 @@ const Navbar = () => {
                   <Button variant="outline" className="w-full">
                     <LayoutDashboard className="w-4 h-4 mr-2" />
                     Dashboard
+                  </Button>
+                </Link>
+                <Link to="/analytics" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="outline" className="w-full">
+                    <BarChart3 className="w-4 h-4 mr-2" />
+                    Analytics
                   </Button>
                 </Link>
                 {isAdmin && (
